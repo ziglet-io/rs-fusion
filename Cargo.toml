@@ -1,0 +1,68 @@
+[package]
+name = "fusion"
+description = "FUSE Message-Oriented User Space"
+authors = ["Jeffrey Hohenstein <jeffrey.hohenstein@gmail.com>"]
+readme = "README.md"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/ziglet-io/fusion"
+homepage = "https://github.com/ziglet-io/fusion"
+
+[dependencies]
+async-trait = {version = "0.1.80"}
+zerocopy = {version = "0.8.24", features = ["derive"]}
+tokio-util = {version = "0.7.13"}
+tokio = { version = "1.37.0", features = ["macros", "rt", "fs", "io-util"] }
+log = {version = "0.4.21"}
+memchr = {version = "2.7.2"}
+libc = {version = "0.2.51"}
+tempfile = { version = "3.10.1" }
+nix = {version = "0.28.0", features = ["fs", "user"]}
+
+[build-dependencies]
+pkg-config = { version = "0.3.14", optional = true }
+
+[dev-dependencies]
+rand.workspace = true
+
+[features]
+default = ["abi-7-39", "libfuse3"]
+libfuse = ["pkg-config"]
+libfuse2 = ["libfuse"]
+libfuse3 = ["libfuse"]
+purerust = ["libfuse"]
+
+abi-7-9 = []
+abi-7-10 = ["abi-7-9"]
+abi-7-11 = ["abi-7-10"]
+abi-7-12 = ["abi-7-11"]
+abi-7-13 = ["abi-7-12"]
+abi-7-14 = ["abi-7-13"]
+abi-7-15 = ["abi-7-14"]
+abi-7-16 = ["abi-7-15"]
+abi-7-17 = ["abi-7-16"]
+abi-7-18 = ["abi-7-17"]
+abi-7-19 = ["abi-7-18"]
+abi-7-20 = ["abi-7-19"]
+abi-7-21 = ["abi-7-20"]
+abi-7-22 = ["abi-7-21"]
+abi-7-23 = ["abi-7-22"]
+abi-7-24 = ["abi-7-23"]
+abi-7-25 = ["abi-7-24"]
+abi-7-26 = ["abi-7-25"]
+abi-7-27 = ["abi-7-26"]
+abi-7-28 = ["abi-7-27"]
+abi-7-29 = ["abi-7-28"]
+abi-7-30 = ["abi-7-29"]
+abi-7-31 = ["abi-7-30"]
+abi-7-32 = ["abi-7-31"]
+abi-7-33 = ["abi-7-32"]
+abi-7-34 = ["abi-7-33"]
+abi-7-35 = ["abi-7-34"]
+abi-7-36 = ["abi-7-35"]
+abi-7-37 = ["abi-7-36"]
+abi-7-38 = ["abi-7-37"]
+abi-7-39 = ["abi-7-38"]
+abi-7-40 = ["abi-7-39"]
+macfuse-4-compat = []
