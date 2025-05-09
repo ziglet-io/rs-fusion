@@ -1,0 +1,29 @@
+**/target/
+
+# IntelliJ
+.idea/
+.zed/
+
+# Data store
+.ipdb/
+
+# Obsidian
+.obsidian/
+
+# VS Code
+.vscode/
+
+# Perf data
+**/perf.data
+**/perf.data.old
+**/flamegraph.svg
+
+# Data files
+**/*.dat
+
+**/test/
+
+**/audit.log
+
+# Mac
+**/.DS_Store
