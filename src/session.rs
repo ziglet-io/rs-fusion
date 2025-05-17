@@ -16,7 +16,7 @@ use crate::{
     ReplyRx, ReplyTx, RequestTx,
 };
 
-use log::{debug, error, info, trace, warn};
+use log::{error, info, trace, warn};
 
 /// Represents a single session between the kernel and a filesystem.
 ///
@@ -130,13 +130,10 @@ impl Inner {
 
         let mut reply = reply.unwrap();
 
-        debug!("\tREPLY error {}", reply.header.error);
-
         let count = reply.write(&mut self.buffer);
 
         match self.writer.write(&self.buffer[..count]) {
             Err(e) => {
-                debug!("{:?}", e);
                 return Err(e.into());
             }
             Ok(r) => r,

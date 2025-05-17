@@ -1,4 +1,5 @@
 use std::fmt::{self, Display};
+use std::sync::Arc;
 
 use log::error;
 use zerocopy::FromBytes;
@@ -7,6 +8,7 @@ use crate::error::Errno;
 use crate::messages::argument::get_vec;
 use crate::messages::fuse_abi::*;
 use crate::{messages::argument::get_string, ReplyTx};
+use tokio::sync::Mutex;
 
 use super::reply::NotifyReply;
 
@@ -112,7 +114,7 @@ impl Request {
                     let (arg, rest2) = fuse_write_in::ref_from_prefix(rest).unwrap();
                     Operation::Write(Write {
                         arg: *arg,
-                        data: rest2[..arg.size as usize].to_vec(),
+                        data: Arc::new(Mutex::new(rest2[..arg.size as usize].to_vec())),
                     })
                 }
                 fuse_opcode::FUSE_STATFS => Operation::StatFs(StatFs {}),
@@ -127,7 +129,7 @@ impl Request {
                 fuse_opcode::FUSE_SETXATTR => {
                     let (arg, rest) = fuse_setxattr_in::mut_from_prefix(rest).unwrap();
                     let (name, rest) = get_string(rest);
-                    let value = get_vec(rest, arg.size as usize);
+                    let value = Arc::new(get_vec(rest, arg.size as usize));
                     Operation::SetXAttr(SetXAttr { arg: *arg, name, value })
                 }
                 fuse_opcode::FUSE_GETXATTR => {
@@ -416,7 +418,7 @@ pub struct Read {
 pub struct Write {
     pub arg: fuse_write_in,
     // TODO make this [Option] so we can take it without copying it
-    pub data: Vec<u8>,
+    pub data: Arc<Mutex<Vec<u8>>>,
 }
 
 /// Get filesystem statistics
@@ -440,7 +442,7 @@ pub struct FSync {
 pub struct SetXAttr {
     pub arg: fuse_setxattr_in,
     pub name: String,
-    pub value: Vec<u8>,
+    pub value: Arc<Vec<u8>>,
 }
 
 pub struct GetXAttr {
