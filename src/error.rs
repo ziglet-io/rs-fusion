@@ -1,4 +1,4 @@
-use std::num::NonZeroI32;
+use std::{fmt::Display, num::NonZeroI32};
 
 macro_rules! errno {
     ($x: expr) => {
@@ -207,6 +207,7 @@ impl Errno {
         err.try_into().ok().map(Errno).unwrap_or(Errno::EIO)
     }
 }
+
 impl From<std::io::Error> for Errno {
     fn from(err: std::io::Error) -> Self {
         let errno = err.raw_os_error().unwrap_or(0);
@@ -216,15 +217,23 @@ impl From<std::io::Error> for Errno {
         }
     }
 }
+
 impl From<std::io::ErrorKind> for Errno {
     fn from(x: std::io::ErrorKind) -> Self {
         let err: std::io::Error = x.into();
         err.into()
     }
 }
+
 impl From<Errno> for i32 {
     fn from(x: Errno) -> Self {
         let x: i32 = x.0.into();
         -x
+    }
+}
+
+impl Display for Errno {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
