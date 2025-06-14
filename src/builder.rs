@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use log::error;
+use log::{debug, error};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -80,7 +80,8 @@ impl Builder {
         self
     }
 
-    pub async fn build(&mut self) -> Result<Session, Errno> {
+    pub async fn open(&mut self) -> Result<Session, Errno> {
+        debug!("BUILDER OPEN");
         if self.outbound_fs_request_tx.is_none() {
             error!("outbound fs request channel required");
             return Err(Errno::EINVAL);
@@ -123,7 +124,7 @@ impl Builder {
 
         let mut inner = Inner {
             _mount: mount,
-            file,
+            file: Some(file),
             writer,
             buffer: vec![0u8; SIZE_BUFFER],
             cancellation_token: self.cancellation_token.clone(),

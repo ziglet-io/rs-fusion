@@ -25,6 +25,7 @@ fn ensure_last_os_error() -> io::Error {
 pub struct Mount {
     fuse_session: *mut c_void,
 }
+
 impl Mount {
     pub fn new(mnt: &Path, options: &[MountOption]) -> io::Result<(File, Mount)> {
         let mnt = CString::new(mnt.as_os_str().as_bytes()).unwrap();
@@ -54,6 +55,7 @@ impl Drop for Mount {
     fn drop(&mut self) {
         unsafe {
             fuse_session_unmount(self.fuse_session);
+
             fuse_session_destroy(self.fuse_session);
         }
     }

@@ -3,10 +3,8 @@ use std::io::Write;
 use tokio::select;
 use tokio::{fs::File, io::AsyncReadExt};
 use tokio_util::sync::CancellationToken;
-use zerocopy::TryFromBytes;
 
 use crate::error::Errno;
-use crate::messages::fuse_abi::fuse_in_header;
 use crate::{
     messages::{
         reply::{IWrite, Reply},
@@ -45,14 +43,19 @@ impl Session {
 /// Internal "actor" that represents a long-running process ferrying kernel requests to the filesystem and
 /// replies from the filesystem to the kernel.
 pub(crate) struct Inner {
-    pub(crate) file: File,
-    pub(crate) writer: std::fs::File,
     pub(crate) _mount: Mount,
+    pub(crate) writer: std::fs::File,
     pub(crate) buffer: Vec<u8>,
+    /// Channel on which we will send requests
     pub(crate) outbound_fs_request_tx: RequestTx,
     pub(crate) inbound_fs_reply_tx: ReplyTx,
     pub(crate) inbound_fs_reply_rx: ReplyRx,
     pub(crate) cancellation_token: CancellationToken,
+    /// Duplicate of the file descriptor used by Mount
+    ///
+    /// # Note
+    /// * [Option]al so we can implement a [Drop] that [std::mem]::forgets the file rather than double-closing
+    pub(crate) file: Option<File>,
 }
 
 impl Inner {
@@ -63,58 +66,70 @@ impl Inner {
     pub(crate) async fn run(&mut self) -> Result<(), Errno> {
         info!("started");
 
-        while !self.cancellation_token.is_cancelled() {
+        while !self.cancellation_token.is_cancelled() || self.is_busy() {
             select! {
-                 _ = self.cancellation_token.cancelled() => {}
-                 reply = self.inbound_fs_reply_rx.recv() => {
-                     self.on_fs_reply(reply).await?;
-                 }
-                  read_result = self.file.read(&mut self.buffer) => {
-
-                      match read_result {
-                     Err(e) => {
-                         match e.raw_os_error() {
-                             // Operation interrupted
-                             Some(ENOENT) => {
-                                 info!("ENOENT");
-                                 continue;
-                             },
-                             // Interrupted by syscall, retry
-                             Some(EINTR) => {
-                                 info!("EINTR");
-                                 continue;
-                             }
-                             // Explicit "try again"
-                             Some(EAGAIN) => {
-                                 info!("EAGAIN");
-                                 continue;
-                             },
-                             // Unmounted
-                             Some(ENODEV) => {
-                                 warn!("ENODEV");
-                                 self.cancellation_token.cancel();
-                             },
-                             // Unhandled
-                             _ => return Err(e.into()),
-                         }
-                     }
-                     Ok(_bytes) => {
-                         let request = Request::parse(&mut self.buffer, &self.inbound_fs_reply_tx)?;
-                         if let Err(_e) = self.outbound_fs_request_tx.send(request).await {
-                             error!("channel send");
-                             return Err(Errno::EIO);
-                         }
-                     }
-                 }
-                 }
+                _ = self.cancellation_token.cancelled(), if !self.cancellation_token.is_cancelled() => {
+                }
+                reply = self.inbound_fs_reply_rx.recv() => {
+                   self.on_fs_reply(reply).await?;
+                }
+                read_result = self.file.as_mut().unwrap().read(&mut self.buffer), if !self.cancellation_token.is_cancelled() => {
+                   self.on_read(&read_result).await?;
+                }
             }
         }
 
-        fuse_in_header::try_ref_from_prefix(&self.buffer).unwrap().0.opcode;
+        let file = self.file.take().unwrap();
+        std::mem::forget(file);
 
         info!("done");
 
         Ok(())
+    }
+
+    pub(crate) async fn on_read(&mut self, read_result: &Result<usize, tokio::io::Error>) -> Result<(), Errno> {
+        match read_result {
+            Err(e) => {
+                match e.raw_os_error() {
+                    // Operation interrupted
+                    Some(ENOENT) => {
+                        info!("ENOENT");
+                        return Ok(());
+                    }
+                    // Interrupted by syscall, retry
+                    Some(EINTR) => {
+                        info!("EINTR");
+                        return Ok(());
+                    }
+                    // Explicit "try again"
+                    Some(EAGAIN) => {
+                        info!("EAGAIN");
+                        return Ok(());
+                    }
+                    // Unmounted
+                    Some(ENODEV) => {
+                        warn!("ENODEV");
+                        self.cancellation_token.cancel();
+                        return Ok(());
+                    }
+                    // Unhandled
+                    _ => todo!(), // _ => return Err(e.into()),
+                }
+            }
+            Ok(_bytes) => {
+                let request = Request::parse(&mut self.buffer, &self.inbound_fs_reply_tx)?;
+                if let Err(_e) = self.outbound_fs_request_tx.send(request).await {
+                    error!("channel send");
+                    return Err(Errno::EIO);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn is_busy(&self) -> bool {
+        !self.inbound_fs_reply_rx.is_closed() || !self.inbound_fs_reply_rx.is_empty()
     }
 
     // --------------------------------------------------------------------------------
@@ -140,5 +155,12 @@ impl Inner {
         };
 
         Ok(())
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let file = self.file.take().unwrap();
+        std::mem::forget(file);
     }
 }
